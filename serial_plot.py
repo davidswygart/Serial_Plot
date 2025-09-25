@@ -8,42 +8,47 @@ import sys
 import serial
 from serial.tools import list_ports
 import matplotlib.pyplot as plt
+from timed_queue import TimedQueue
 
 # Configuration
 PORT = 'COM14'
 BAUD = 115200
-MAX_POINTS = 500  # how many points to keep per series
+X_RANGE = 10  # size of plotting window in seconds
 
-def main(port, baud, max_points):
+def main(port, baud, x_range):
     ser = open_serial_port(port, baud)
-    start_time = time.time()
     
     series = {}
-    lines = {}
 
     plt.ion()  # Turn on interactive mode
     fig, ax = plt.subplots()
-    ax.set_xlim(0, max_points)
-    ax.set_ylim(0, 1023)
+    
+    ax.set_ylim(0, 100)
+    ax.set_xlim(-x_range, 0)
     ax.set_title("Live Serial Data by Label")
-    ax.set_xlabel("Sample")
+    ax.set_xlabel("Time (s)")
     ax.set_ylabel("Value")
+
     while True:
-            (label, value) = read_and_parse(ser)
+        (label, value) = read_and_parse(ser)
 
-            if label not in series:
-                series[label] = deque([0]*max_points, maxlen=max_points)
-                lines[label] = ax.plot([], [], label=label)[0]
-                ax.legend(loc='upper right')
-            series[label].append(value)
-            # elapsed_time = time.time() - start_time
+        if label not in series:
+            series[label] = {}
+            series[label]['data'] = TimedQueue(timeout_seconds=x_range+.01)
+            series[label]['line'] = ax.plot([], [], label=label)[0]
+            ax.legend(loc='upper right')
+        series[label]['data'].add(value)
 
-            lines[label].set_data(range(len(series[label])), list(series[label])) # TODO use elapsed_time for x-axis
+        now = time.time()
+        df = series[label]['data'].get_data()
+        
 
-            ax.relim()
-            ax.autoscale_view()
-            fig.canvas.draw()
-            fig.canvas.flush_events()
+        series[label]['line'].set_data(df.time-now, df.value)
+        
+        # ax.relim()
+        # ax.autoscale_view()
+        fig.canvas.draw()
+        fig.canvas.flush_events()
 
 def open_serial_port(port, rate):
     while True:
@@ -96,5 +101,5 @@ if __name__ == '__main__':
     if len(sys.argv) >= 3:
         BAUD = int(sys.argv[2])
     if len(sys.argv) >= 4:
-        MAX_POINTS = int(sys.argv[3])
-    main(PORT, BAUD, MAX_POINTS)
+        X_RANGE = int(sys.argv[3])
+    main(PORT, BAUD, X_RANGE)
