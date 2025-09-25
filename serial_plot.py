@@ -40,10 +40,9 @@ def main(port, baud, x_range):
         series[label]['data'].add(value)
 
         now = time.time()
-        df = series[label]['data'].get_data()
-        
-
-        series[label]['line'].set_data(df.time-now, df.value)
+        for label in series:
+            df = series[label]['data'].get_data()
+            series[label]['line'].set_data(df.time-now, df.value)
         
         # ax.relim()
         # ax.autoscale_view()
