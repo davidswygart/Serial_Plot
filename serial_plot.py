@@ -5,6 +5,7 @@ plot whenever new "label:value" pairs arrive.
 import time
 from collections import deque
 import sys
+import threading
 import serial
 from serial.tools import list_ports
 import matplotlib.pyplot as plt
@@ -29,25 +30,48 @@ def main(port, baud, x_range):
     ax.set_xlabel("Time (s)")
     ax.set_ylabel("Value")
 
-    while True:
-        (label, value) = read_and_parse(ser)
+    # Configuration: how often to update the plot (seconds)
+    UPDATE_INTERVAL = 0.1
 
-        if label not in series:
-            series[label] = {}
-            series[label]['data'] = TimedQueue(timeout_seconds=x_range+.01)
-            series[label]['line'] = ax.plot([], [], label=label)[0]
-            ax.legend(loc='upper right')
-        series[label]['data'].add(value)
+    stop_event = threading.Event()
 
-        now = time.time()
-        for label in series:
-            df = series[label]['data'].get_data()
-            series[label]['line'].set_data(df.time-now, df.value)
-        
-        # ax.relim()
-        # ax.autoscale_view()
-        fig.canvas.draw()
-        fig.canvas.flush_events()
+    # Background reader: reads serial lines and enqueues values into TimedQueue per label
+    def reader_thread():
+        while not stop_event.is_set():
+            label, value = read_and_parse(ser)
+            if label not in series:
+                # Note: creating matplotlib Line2D objects must be done from the main thread
+                # so we only create the TimedQueue here; the main thread will create lines when it sees a new label
+                series[label] = {}
+                series[label]['data'] = TimedQueue(timeout_seconds=x_range + .01)
+            series[label]['data'].add(value)
+
+    t = threading.Thread(target=reader_thread, daemon=True)
+    t.start()
+
+    try:
+        while True:
+            now = time.time()
+
+            # Ensure any new labels have plot lines created on the main thread
+            for label in list(series.keys()):
+                if 'line' not in series[label]:
+                    series[label]['line'] = ax.plot([], [], label=label)[0]
+                    ax.legend(loc='upper right')
+
+            for label in series:
+                df = series[label]['data'].get_data()
+                if df.empty:
+                    series[label]['line'].set_data([], [])
+                else:
+                    series[label]['line'].set_data(df.time - now, df.value)
+
+            fig.canvas.draw()
+            fig.canvas.flush_events()
+            time.sleep(UPDATE_INTERVAL)
+    except KeyboardInterrupt:
+        stop_event.set()
+        t.join(timeout=1)
 
 def open_serial_port(port, rate):
     while True:
