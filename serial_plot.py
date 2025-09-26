@@ -10,17 +10,17 @@ import matplotlib.pyplot as plt
 from timed_queue import TimedQueue
 stop_event = threading.Event()
 
-def main(port, baud, x_range):
-    ser = open_serial_port(port, baud)
+def main(opts):
+    ser = open_serial_port(opts.port, opts.baud)
     
     series = {}
 
     # Start the background reader thread (module-level reader_loop)
-    rl = threading.Thread(target=reader_loop, args=(ser, series, x_range), daemon=True)
+    rl = threading.Thread(target=reader_loop, args=(ser, series, opts.x_range), daemon=True)
     rl.start()
 
     try:
-        plot_loop(series , x_range)
+        plot_loop(series , opts)
     except KeyboardInterrupt:
         stop_event.set()
         rl.join(timeout=10)
@@ -77,18 +77,15 @@ def reader_loop(ser, series, x_range):
             series[label]['data'] = TimedQueue(timeout_seconds=x_range + .01)
         series[label]['data'].add(value)
 
-def plot_loop(series , x_range):
+def plot_loop(series , opts):
     plt.ion()  # Turn on interactive mode
     fig, ax = plt.subplots()
     
-    ax.set_ylim(0, 100)
-    ax.set_xlim(-x_range, 0)
+    ax.set_ylim(opts.y_min, opts.y_max)
+    ax.set_xlim(-opts.x_range, 0)
     ax.set_title("Live Serial Data by Label")
     ax.set_xlabel("Time (s)")
     ax.set_ylabel("Value")
-
-    # Configuration: how often to update the plot (seconds)
-    UPDATE_INTERVAL = 0.1
 
     while not stop_event.is_set():
         now = time.time()
@@ -110,7 +107,7 @@ def plot_loop(series , x_range):
 
         fig.canvas.draw()
         fig.canvas.flush_events()
-        time.sleep(UPDATE_INTERVAL)
+        time.sleep(opts.update_interval)
 
 
 if __name__ == '__main__':
@@ -120,9 +117,10 @@ if __name__ == '__main__':
     parser.add_argument('--port', '-p', default='COM14', help='Serial port (e.g. COM14)')
     parser.add_argument('--baud', '-b', type=int, default=115200, help='Serial baud rate')
     parser.add_argument('--x-range', '-x', type=int, default=300, help='X axis window in seconds')
-    # kept for compatibility, but main() currently doesn't accept update-interval
     parser.add_argument('--update-interval', '-u', type=float, default=0.1, help='Plot update interval in seconds')
+    parser.add_argument('--y_min', '-n', type=float, default=0, help='min Y axis value')
+    parser.add_argument('--y_max', '-m', type=float, default=100, help='min Y axis value')
 
-    args = parser.parse_args()
+    options = parser.parse_args()
 
-    main(args.port, args.baud, args.x_range)
+    main(options)
