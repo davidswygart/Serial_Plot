@@ -1,6 +1,6 @@
 import time
 from collections import deque
-from typing import Any, Tuple
+from typing import Any
 import pandas as pd
 import threading
 

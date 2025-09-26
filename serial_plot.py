@@ -1,9 +1,7 @@
-"""Live plotter that reads lines from a serial port and updates a matplotlib
-plot whenever new "label:value" pairs arrive.
+"""Live plotter that reads lines from a serial port and plots "label:value" pairs.
 """
 
 import time
-from collections import deque
 import sys
 import threading
 import serial
@@ -111,11 +109,6 @@ def read_and_parse(ser):
         except ValueError:
             print(f"Skipping unparseable value: {s[1]}")
             continue
-
-
-
-
-
 
 if __name__ == '__main__':
     # Allow overriding port/baud from command-line args
