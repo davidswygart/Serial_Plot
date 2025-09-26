@@ -2,6 +2,7 @@ import time
 from collections import deque
 from typing import Any, Tuple
 import pandas as pd
+import threading
 
 class TimedQueue:
     def __init__(self, timeout_seconds: float):
@@ -10,12 +11,15 @@ class TimedQueue:
         """
         self.timeout_seconds = timeout_seconds
         self.queue = deque()
+        self._lock = threading.RLock()
 
     def add(self, value: Any):
         """
         Adds a new data point to the queue with the current timestamp.
         """
-        self.queue.append((time.time(), value))
+        now = time.time()
+        with self._lock:
+            self.queue.append((now, value))
 
     def _drop_expired(self):
         """
@@ -24,14 +28,16 @@ class TimedQueue:
         """
         now = time.time()
         # Pop all items from the left that are older than the timeout
-        while self.queue and self.queue[0][0] < now - self.timeout_seconds:
-            self.queue.popleft()
+        with self._lock:
+            while self.queue and self.queue[0][0] < now - self.timeout_seconds:
+                self.queue.popleft()
 
     def get_data(self) :
         """
         Returns a list of all currently valid data points and their timestamp.
         Expired items are removed automatically before returning.
         """
-        self._drop_expired()
-        # times, values = map(tuple, zip(*self.queue))
-        return pd.DataFrame(self.queue, columns=['time','value'])
+        with self._lock:
+            self._drop_expired()
+            data = list(self.queue)
+        return pd.DataFrame(data, columns=['time', 'value'])
