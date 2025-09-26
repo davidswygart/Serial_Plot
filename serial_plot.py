@@ -110,10 +110,12 @@ def plot_loop(series , x_range):
                 series[label]['line'] = ax.plot([], [], label=label)[0]
                 ax.legend(loc='upper right')
 
-        for label in series:
+        for label in list(series.keys()):
             df = series[label]['data'].get_data()
-            if df.empty:
-                series[label]['line'].set_data([], [])
+            if df.empty: 
+                series[label]['line'].remove()
+                del series[label]   # TODO: make thread safe
+                ax.legend(loc='upper right')
             else:
                 series[label]['line'].set_data(df.time - now, df.value)
 
