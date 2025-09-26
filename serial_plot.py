@@ -9,10 +9,6 @@ from serial.tools import list_ports
 import matplotlib.pyplot as plt
 from timed_queue import TimedQueue
 stop_event = threading.Event()
-# Configuration
-PORT = 'COM14'
-BAUD = 115200
-X_RANGE = 60*5  # size of plotting window in seconds
 
 def main(port, baud, x_range):
     ser = open_serial_port(port, baud)
@@ -125,11 +121,15 @@ def plot_loop(series , x_range):
 
 
 if __name__ == '__main__':
-    # Allow overriding port/baud from command-line args
-    if len(sys.argv) >= 2:
-        PORT = sys.argv[1]
-    if len(sys.argv) >= 3:
-        BAUD = int(sys.argv[2])
-    if len(sys.argv) >= 4:
-        X_RANGE = int(sys.argv[3])
-    main(PORT, BAUD, X_RANGE)
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Live serial plotter')
+    parser.add_argument('--port', '-p', default='COM14', help='Serial port (e.g. COM14)')
+    parser.add_argument('--baud', '-b', type=int, default=115200, help='Serial baud rate')
+    parser.add_argument('--x-range', '-x', type=int, default=300, help='X axis window in seconds')
+    # kept for compatibility, but main() currently doesn't accept update-interval
+    parser.add_argument('--update-interval', '-u', type=float, default=0.1, help='Plot update interval in seconds')
+
+    args = parser.parse_args()
+
+    main(args.port, args.baud, args.x_range)
