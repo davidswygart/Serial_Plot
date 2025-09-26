@@ -33,18 +33,8 @@ def main(port, baud, x_range):
 
     stop_event = threading.Event()
 
-    # Background reader: reads serial lines and enqueues values into TimedQueue per label
-    def reader_thread():
-        while not stop_event.is_set():
-            label, value = read_and_parse(ser)
-            if label not in series:
-                # Note: creating matplotlib Line2D objects must be done from the main thread
-                # so we only create the TimedQueue here; the main thread will create lines when it sees a new label
-                series[label] = {}
-                series[label]['data'] = TimedQueue(timeout_seconds=x_range + .01)
-            series[label]['data'].add(value)
-
-    t = threading.Thread(target=reader_thread, daemon=True)
+    # Start the background reader thread (module-level reader_loop)
+    t = threading.Thread(target=reader_loop, args=(ser, series, x_range, stop_event), daemon=True)
     t.start()
 
     try:
@@ -109,6 +99,22 @@ def read_and_parse(ser):
         except ValueError:
             print(f"Skipping unparseable value: {s[1]}")
             continue
+
+def reader_loop(ser, series, x_range, stop_event):
+    """Background reader: read lines from serial and add to per-label TimedQueue.
+    """
+    while not stop_event.is_set():
+        try:
+            label, value = read_and_parse(ser)
+        except Exception as e:
+            print(f"Serial read error: {e}")
+            continue
+
+        if label not in series:
+            # create storage for label; plotting line will be created by main thread
+            series[label] = {}
+            series[label]['data'] = TimedQueue(timeout_seconds=x_range + .01)
+        series[label]['data'].add(value)
 
 if __name__ == '__main__':
     # Allow overriding port/baud from command-line args
