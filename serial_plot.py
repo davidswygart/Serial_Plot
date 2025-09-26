@@ -12,7 +12,7 @@ stop_event = threading.Event()
 # Configuration
 PORT = 'COM14'
 BAUD = 115200
-X_RANGE = 10  # size of plotting window in seconds
+X_RANGE = 60*5  # size of plotting window in seconds
 
 def main(port, baud, x_range):
     ser = open_serial_port(port, baud)
