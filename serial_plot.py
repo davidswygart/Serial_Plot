@@ -8,7 +8,7 @@ import serial
 from serial.tools import list_ports
 import matplotlib.pyplot as plt
 from timed_queue import TimedQueue
-
+stop_event = threading.Event()
 # Configuration
 PORT = 'COM14'
 BAUD = 115200
@@ -19,47 +19,23 @@ def main(port, baud, x_range):
     
     series = {}
 
-    plt.ion()  # Turn on interactive mode
-    fig, ax = plt.subplots()
-    
-    ax.set_ylim(0, 100)
-    ax.set_xlim(-x_range, 0)
-    ax.set_title("Live Serial Data by Label")
-    ax.set_xlabel("Time (s)")
-    ax.set_ylabel("Value")
-
-    # Configuration: how often to update the plot (seconds)
-    UPDATE_INTERVAL = 0.1
-
-    stop_event = threading.Event()
-
     # Start the background reader thread (module-level reader_loop)
-    t = threading.Thread(target=reader_loop, args=(ser, series, x_range, stop_event), daemon=True)
-    t.start()
+    rl = threading.Thread(target=reader_loop, args=(ser, series, x_range), daemon=True)
+    rl.start()
+
+    # Start the plotting loop
+    pl = threading.Thread(target=plot_loop, args=(series , x_range), daemon=True)
+    pl.start()
+
 
     try:
         while True:
-            now = time.time()
-
-            # Ensure any new labels have plot lines created on the main thread
-            for label in list(series.keys()):
-                if 'line' not in series[label]:
-                    series[label]['line'] = ax.plot([], [], label=label)[0]
-                    ax.legend(loc='upper right')
-
-            for label in series:
-                df = series[label]['data'].get_data()
-                if df.empty:
-                    series[label]['line'].set_data([], [])
-                else:
-                    series[label]['line'].set_data(df.time - now, df.value)
-
-            fig.canvas.draw()
-            fig.canvas.flush_events()
-            time.sleep(UPDATE_INTERVAL)
+            time.sleep(100)
     except KeyboardInterrupt:
         stop_event.set()
-        t.join(timeout=1)
+        rl.join(timeout=10)
+        pl.join(timeout=10)
+
 
 def open_serial_port(port, rate):
     while True:
@@ -100,21 +76,51 @@ def read_and_parse(ser):
             print(f"Skipping unparseable value: {s[1]}")
             continue
 
-def reader_loop(ser, series, x_range, stop_event):
+def reader_loop(ser, series, x_range):
     """Background reader: read lines from serial and add to per-label TimedQueue.
     """
     while not stop_event.is_set():
-        try:
-            label, value = read_and_parse(ser)
-        except Exception as e:
-            print(f"Serial read error: {e}")
-            continue
+        label, value = read_and_parse(ser)
 
         if label not in series:
             # create storage for label; plotting line will be created by main thread
             series[label] = {}
             series[label]['data'] = TimedQueue(timeout_seconds=x_range + .01)
         series[label]['data'].add(value)
+
+def plot_loop(series , x_range):
+    plt.ion()  # Turn on interactive mode
+    fig, ax = plt.subplots()
+    
+    ax.set_ylim(0, 100)
+    ax.set_xlim(-x_range, 0)
+    ax.set_title("Live Serial Data by Label")
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("Value")
+
+    # Configuration: how often to update the plot (seconds)
+    UPDATE_INTERVAL = 0.1
+
+    while not stop_event.is_set():
+        now = time.time()
+
+        # Ensure any new labels have plot lines created on the main thread
+        for label in list(series.keys()):
+            if 'line' not in series[label]:
+                series[label]['line'] = ax.plot([], [], label=label)[0]
+                ax.legend(loc='upper right')
+
+        for label in series:
+            df = series[label]['data'].get_data()
+            if df.empty:
+                series[label]['line'].set_data([], [])
+            else:
+                series[label]['line'].set_data(df.time - now, df.value)
+
+        fig.canvas.draw()
+        fig.canvas.flush_events()
+        time.sleep(UPDATE_INTERVAL)
+
 
 if __name__ == '__main__':
     # Allow overriding port/baud from command-line args
