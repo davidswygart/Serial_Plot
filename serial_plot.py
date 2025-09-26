@@ -19,18 +19,11 @@ def main(port, baud, x_range):
     rl = threading.Thread(target=reader_loop, args=(ser, series, x_range), daemon=True)
     rl.start()
 
-    # Start the plotting loop
-    pl = threading.Thread(target=plot_loop, args=(series , x_range), daemon=True)
-    pl.start()
-
-
     try:
-        while True:
-            time.sleep(100)
+        plot_loop(series , x_range)
     except KeyboardInterrupt:
         stop_event.set()
         rl.join(timeout=10)
-        pl.join(timeout=10)
 
 
 def open_serial_port(port, rate):
