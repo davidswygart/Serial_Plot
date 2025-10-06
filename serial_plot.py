@@ -51,16 +51,15 @@ def list_com_ports():
 def read_and_parse(ser):
     while True:
         line = ser.readline().decode('utf-8').strip()
-        s = line.split(':')
+        s = line.split(',')
         if len(s) != 2:
             print(f"Skipping unparseable line: {line}")
             continue
 
-        label = s[0]
-
         try:
-            value = float(s[1])
-            return label, value
+            values = [float(v) for v in s ]
+            labels = [str(num) for num in range(len(values))]
+            return labels, values
         except ValueError:
             print(f"Skipping unparseable value: {s[1]}")
             continue
@@ -69,13 +68,15 @@ def reader_loop(ser, series, x_range):
     """Background reader: read lines from serial and add to per-label TimedQueue.
     """
     while not stop_event.is_set():
-        label, value = read_and_parse(ser)
-
-        if label not in series:
-            # create storage for label; plotting line will be created by main thread
-            series[label] = {}
-            series[label]['data'] = TimedQueue(timeout_seconds=x_range + .01)
-        series[label]['data'].add(value)
+        labels, values = read_and_parse(ser)
+        
+        for ind, label in enumerate(labels):
+            if label not in series:
+                # create storage for label; plotting line will be created by main thread
+                series[label] = {}
+                series[label]['data'] = TimedQueue(timeout_seconds=x_range + .01)
+            series[label]['data'].add(values[ind])
+            print(f"added {values[ind]}")
 
 def plot_loop(series , opts):
     plt.ion()  # Turn on interactive mode
