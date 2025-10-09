@@ -75,7 +75,7 @@ def reader_loop(ser, series, x_range):
                 series[label] = {}
                 series[label]['data'] = TimedQueue(timeout_seconds=x_range + .01)
             series[label]['data'].add(values[ind])
-            print(f"added {values[ind]}")
+            # print(f"added {values[ind]}")
 
 def plot_loop(series , opts):
     plt.ion()  # Turn on interactive mode
