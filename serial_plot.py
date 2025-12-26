@@ -105,6 +105,20 @@ def plot_loop(series , opts):
                 ax.legend(loc='upper right')
             else:
                 series[label]['line'].set_data(df.time - now, df.value)
+        
+        # Auto-scale Y axis if not fixed
+        if not opts.y_max:
+            maxs = [series[l]['data'].get_data().value.max() for l in series]
+            if maxs:
+                ymax = max(maxs)
+                ymax = ymax + abs(ymax)*0.1
+                ax.set_ylim(top=ymax)
+        if not opts.y_min:
+            mins = [series[l]['data'].get_data().value.min() for l in series]
+            if mins:
+                ymin = min(mins)
+                ymin = ymin - abs(ymin)*0.1
+                ax.set_ylim(bottom=ymin)
 
         fig.canvas.draw()
         fig.canvas.flush_events()
@@ -119,8 +133,8 @@ if __name__ == '__main__':
     parser.add_argument('--baud', type=int, default=115200, help='Serial baud rate')
     parser.add_argument('--x-range', type=int, default=300, help='X axis window in seconds')
     parser.add_argument('--update-interval', type=float, default=0.1, help='Plot update interval in seconds')
-    parser.add_argument('--y_min', type=float, default=0, help='min Y axis value')
-    parser.add_argument('--y_max', type=float, default=100, help='min Y axis value')
+    parser.add_argument('--y_min', type=float, help='min Y axis value')
+    parser.add_argument('--y_max', type=float, help='min Y axis value')
     parser.add_argument('--y_label', type=str, help='Y-axis label')
     parser.add_argument('--title', type=str, help='Graph title')
 
