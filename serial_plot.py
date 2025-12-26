@@ -82,9 +82,11 @@ def plot_loop(series , opts):
     
     ax.set_ylim(opts.y_min, opts.y_max)
     ax.set_xlim(-opts.x_range, 0)
-    ax.set_title("Live Serial Data by Label")
+    if opts.title:
+        ax.set_title(opts.title)
     ax.set_xlabel("Time (s)")
-    ax.set_ylabel(opts.y_label)
+    if opts.y_label:
+        ax.set_ylabel(opts.y_label)
 
     while not stop_event.is_set():
         now = time.time()
@@ -119,7 +121,8 @@ if __name__ == '__main__':
     parser.add_argument('--update-interval', type=float, default=0.1, help='Plot update interval in seconds')
     parser.add_argument('--y_min', type=float, default=0, help='min Y axis value')
     parser.add_argument('--y_max', type=float, default=100, help='min Y axis value')
-    parser.add_argument('--y_label', default='Value', help='Y-axis label')
+    parser.add_argument('--y_label', type=str, help='Y-axis label')
+    parser.add_argument('--title', type=str, help='Graph title')
 
     options = parser.parse_args()
 
