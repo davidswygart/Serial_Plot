@@ -113,12 +113,12 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser(description='Live serial plotter')
-    parser.add_argument('--port', '-p', default='COM14', help='Serial port (e.g. COM14)')
-    parser.add_argument('--baud', '-b', type=int, default=115200, help='Serial baud rate')
-    parser.add_argument('--x-range', '-x', type=int, default=300, help='X axis window in seconds')
-    parser.add_argument('--update-interval', '-u', type=float, default=0.1, help='Plot update interval in seconds')
-    parser.add_argument('--y_min', '-n', type=float, default=0, help='min Y axis value')
-    parser.add_argument('--y_max', '-m', type=float, default=100, help='min Y axis value')
+    parser.add_argument('--port', default='COM14', help='Serial port (e.g. COM14)')
+    parser.add_argument('--baud', type=int, default=115200, help='Serial baud rate')
+    parser.add_argument('--x-range', type=int, default=300, help='X axis window in seconds')
+    parser.add_argument('--update-interval', type=float, default=0.1, help='Plot update interval in seconds')
+    parser.add_argument('--y_min', type=float, default=0, help='min Y axis value')
+    parser.add_argument('--y_max', type=float, default=100, help='min Y axis value')
 
     options = parser.parse_args()
 
