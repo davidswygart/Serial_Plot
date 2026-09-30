@@ -37,15 +37,27 @@ def main(opts):
 
 def open_serial_port(port, rate):
     while True:
-        try:
-            ser = serial.Serial(port, rate, timeout=None)
-            print(f"Opened serial port {port} @ {rate}")
-            return ser
-        except Exception as e:
-            print(f"Failed to open serial port {port}: {e}")
-            list_com_ports()
-            print(f"retrying in 5 seconds...")
-            time.sleep(5)
+        if port:
+            candidates = [port]
+        else:
+            ports = list_ports.comports()
+            if not ports:
+                print("No serial/com ports found.")
+            ports = sorted(ports, key=lambda x: "USB" not in x.description)
+            candidates = [p.device for p in ports]
+                
+
+        for c in candidates:
+            try:
+                ser = serial.Serial(c, rate, timeout=None)
+                print(f"Opened serial port {c} @ {rate}")
+                return ser
+            except Exception as e:
+                print(f"Failed to open serial port {c}: {e}")
+
+        list_com_ports()
+        print("retrying in 5 seconds...")
+        time.sleep(5)
 
 
 def list_com_ports():
@@ -226,7 +238,7 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser(description='Live serial plotter')
-    parser.add_argument('--port', default='COM7', help='Serial port (e.g. COM14)')
+    parser.add_argument('--port', help='Serial port to use (e.g. COM14); discover automatically if omitted')
     parser.add_argument('--baud', type=int, default=115200, help='Serial baud rate')
     parser.add_argument('--x-range', type=int, default=10, help='X axis window in seconds')
     parser.add_argument('--update-interval', type=float, default=0.1, help='Plot update interval in seconds')
