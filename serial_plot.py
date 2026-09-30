@@ -183,11 +183,19 @@ def plot_loop(series , opts):
         
         # Auto-scale Y axis if not fixed
         if data_bounds and (not opts.y_max or not opts.y_min):
+            min_span = 0.3
+            margin = 0.3
+        
             data_min = min(bounds[0] for bounds in data_bounds)
             data_max = max(bounds[1] for bounds in data_bounds)
-            ymin = opts.y_min if opts.y_min else data_min - abs(data_min) * 0.1
-            ymax = opts.y_max if opts.y_max else data_max + abs(data_max) * 0.1
-            if (ymin, ymax) != ax.get_ylim():
+            (ymin, ymax) = ax.get_ylim()
+            yspan = ymax-ymin
+            data_span = data_max-data_min
+
+            #only recalculate if data is beyond range or taking up a small portion of the graph
+            if data_min<ymin or data_max>ymax or (data_span/yspan)<min_span: 
+                ymin = opts.y_min if opts.y_min else data_min-data_span*margin
+                ymax = opts.y_max if opts.y_max else data_max+data_span*margin
                 ax.set_ylim(ymin, ymax)
                 background = None
 
@@ -215,7 +223,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Live serial plotter')
     parser.add_argument('--port', default='COM7', help='Serial port (e.g. COM14)')
     parser.add_argument('--baud', type=int, default=115200, help='Serial baud rate')
-    parser.add_argument('--x-range', type=int, default=300, help='X axis window in seconds')
+    parser.add_argument('--x-range', type=int, default=10, help='X axis window in seconds')
     parser.add_argument('--update-interval', type=float, default=0.1, help='Plot update interval in seconds')
     parser.add_argument('--y_min', type=float, help='min Y axis value')
     parser.add_argument('--y_max', type=float, help='min Y axis value')
