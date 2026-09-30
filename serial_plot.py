@@ -1,4 +1,12 @@
-"""Live plotter that reads lines from a serial port and plots "label:value" pairs.
+"""Live plotter that reads values from serial port and plots data.
+Each newline is parsed, timestamped, and plotted. 
+Multiple trendlines can be plotted by using label:value pairs, comma seperated values, or both.
+If no label is provided (comma seperated values), then automatic labels are generated (e.g. A, B, C, ...)
+Example of acceptable formats:
+1. labelA: valueA, labelB: valueB \n
+2. valueA, valueB \n
+3 labelA: valueA \n labelB: valueB \n  **
+**This format will result in a slightly later timestamp for valueB vs valueA.
 """
 
 import time
@@ -47,34 +55,44 @@ def list_com_ports():
     for p in ports:
         print(f"- {p.device}: {p.description}")
 
+def parse_line(line):
+    samples = []
+    for index, item in enumerate(line.split(',')):
+        parts = item.split(':', maxsplit=1)
+        if len(parts) == 2:
+            label, raw_value = parts[0].strip(), parts[1].strip()
+            if not label:
+                print(f"Skipping unparseable field: {item}")
+                continue
+        else:
+            label = chr(ord('A') + index)
+            raw_value = item.strip()
+
+        try:
+            samples.append((label, float(raw_value)))
+        except ValueError:
+            print(f"Skipping unparseable value: {raw_value}")
+    return samples
+
+
 def read_and_parse(ser):
     while True:
         line = ser.readline().decode('utf-8').strip()
-        s = line.split(':')
-        if len(s) != 2:
-            print(f"Skipping unparseable line: {line}")
-            continue
-
-        label = s[0]
-
-        try:
-            value = float(s[1])
-            return label, value
-        except ValueError:
-            print(f"Skipping unparseable value: {s[1]}")
-            continue
+        samples = parse_line(line)
+        if samples:
+            return samples
+        print(f"Skipping unparseable line: {line}")
 
 def reader_loop(ser, series, x_range):
     """Background reader: read lines from serial and add to per-label TimedQueue.
     """
     while not stop_event.is_set():
-        label, value = read_and_parse(ser)
-
-        if label not in series:
-            # create storage for label; plotting line will be created by main thread
-            series[label] = {}
-            series[label]['data'] = TimedQueue(timeout_seconds=x_range + .01)
-        series[label]['data'].add(value)
+        for label, value in read_and_parse(ser):
+            if label not in series:
+                # create storage for label; plotting line will be created by main thread
+                series[label] = {}
+                series[label]['data'] = TimedQueue(timeout_seconds=x_range + .01)
+            series[label]['data'].add(value)
 
 def plot_loop(series , opts):
     plt.ion()  # Turn on interactive mode
