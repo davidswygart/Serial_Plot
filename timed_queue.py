@@ -1,6 +1,6 @@
 import time
 from collections import deque
-import pandas as pd
+import numpy as np
 import threading
 
 class TimedQueue:
@@ -20,23 +20,25 @@ class TimedQueue:
         with self._lock:
             self.queue.append((now, value))
 
-    def _drop_expired(self):
+    def _drop_expired(self, now):
         """
         Removes all expired data points from the front of the queue.
         This is an O(k) operation where k is the number of expired items.
         """
-        now = time.time()
         # Pop all items from the left that are older than the timeout
-        with self._lock:
-            while self.queue and self.queue[0][0] < now - self.timeout_seconds:
-                self.queue.popleft()
+        while self.queue and self.queue[0][0] < now - self.timeout_seconds:
+            self.queue.popleft()
 
     def get_data(self) :
         """
-        Returns a list of all currently valid data points and their timestamp.
+        Returns timestamp and value arrays for all valid points.
         Expired items are removed automatically before returning.
         """
         with self._lock:
-            self._drop_expired()
-            data = list(self.queue)
-        return pd.DataFrame(data, columns=['time', 'value'])
+            self._drop_expired(time.time())
+            data = np.fromiter(
+                (value for point in self.queue for value in point),
+                dtype=np.float64,
+                count=len(self.queue) * 2,
+            ).reshape(-1, 2)
+        return data[:, 0], data[:, 1]

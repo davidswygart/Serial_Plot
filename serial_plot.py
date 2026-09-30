@@ -14,6 +14,7 @@ import threading
 import serial
 from serial.tools import list_ports
 import matplotlib.pyplot as plt
+import numpy as np
 from timed_queue import TimedQueue
 stop_event = threading.Event()
 
@@ -54,6 +55,30 @@ def list_com_ports():
     print("Available serial ports:")
     for p in ports:
         print(f"- {p.device}: {p.description}")
+
+
+def downsample_for_display(timestamps, values, now, x_range, pixel_width):
+    visible = timestamps >= now - x_range
+    timestamps = timestamps[visible]
+    values = values[visible]
+    x_values = timestamps - now
+
+    pixel_width = max(1, int(pixel_width))
+    if x_range <= 0 or values.size <= pixel_width * 2 or not np.isfinite(values).all():
+        return x_values, values
+
+    buckets = np.floor((x_values + x_range) * (pixel_width / x_range)).astype(np.intp)
+    buckets = np.clip(buckets, 0, pixel_width - 1)
+    minima = np.full(pixel_width, np.inf)
+    maxima = np.full(pixel_width, -np.inf)
+    np.minimum.at(minima, buckets, values)
+    np.maximum.at(maxima, buckets, values)
+
+    occupied = np.flatnonzero(np.isfinite(minima))
+    bucket_x = (occupied + 0.5) * (x_range / pixel_width) - x_range
+    bucket_y = np.column_stack((minima[occupied], maxima[occupied])).ravel()
+    return np.repeat(bucket_x, 2), bucket_y
+
 
 def parse_line(line):
     samples = []
@@ -97,6 +122,24 @@ def reader_loop(ser, series, x_range):
 def plot_loop(series , opts):
     plt.ion()  # Turn on interactive mode
     fig, ax = plt.subplots()
+    copy_from_bbox = getattr(fig.canvas, 'copy_from_bbox', None)
+    restore_region = getattr(fig.canvas, 'restore_region', None)
+    use_blit = (
+        fig.canvas.supports_blit
+        and callable(copy_from_bbox)
+        and callable(restore_region)
+    )
+    background = None
+
+    if use_blit:
+        assert callable(copy_from_bbox)
+        assert callable(restore_region)
+
+        def capture_background(_event):
+            nonlocal background
+            background = copy_from_bbox(ax.bbox)
+
+        fig.canvas.mpl_connect('draw_event', capture_background)
     
     ax.set_ylim(opts.y_min, opts.y_max)
     ax.set_xlim(-opts.x_range, 0)
@@ -108,37 +151,60 @@ def plot_loop(series , opts):
 
     while not stop_event.is_set():
         now = time.time()
+        data_bounds = []
 
         # Ensure any new labels have plot lines created on the main thread
         for label in list(series.keys()):
             if 'line' not in series[label]:
-                series[label]['line'] = ax.plot([], [], label=label)[0]
+                line = ax.plot([], [], label=label)[0]
+                if use_blit:
+                    line.set_animated(True)
+                series[label]['line'] = line
                 ax.legend(loc='upper right')
+                background = None
 
         for label in list(series.keys()):
-            df = series[label]['data'].get_data()
-            if df.empty: 
+            if 'line' not in series[label]:
+                continue
+            timestamps, values = series[label]['data'].get_data()
+            if values.size == 0:
                 series[label]['line'].remove()
                 del series[label]   # TODO: make thread safe
                 ax.legend(loc='upper right')
+                background = None
             else:
-                series[label]['line'].set_data(df.time - now, df.value)
+                x_values, display_values = downsample_for_display(
+                    timestamps, values, now, opts.x_range, ax.bbox.width
+                )
+                series[label]['line'].set_data(x_values, display_values)
+                finite_values = display_values[np.isfinite(display_values)]
+                if finite_values.size:
+                    data_bounds.append((finite_values.min(), finite_values.max()))
         
         # Auto-scale Y axis if not fixed
-        if not opts.y_max:
-            maxs = [series[l]['data'].get_data().value.max() for l in series]
-            if maxs:
-                ymax = max(maxs)
-                ymax = ymax + abs(ymax)*0.1
-                ax.set_ylim(top=ymax)
-        if not opts.y_min:
-            mins = [series[l]['data'].get_data().value.min() for l in series]
-            if mins:
-                ymin = min(mins)
-                ymin = ymin - abs(ymin)*0.1
-                ax.set_ylim(bottom=ymin)
+        if data_bounds and (not opts.y_max or not opts.y_min):
+            data_min = min(bounds[0] for bounds in data_bounds)
+            data_max = max(bounds[1] for bounds in data_bounds)
+            ymin = opts.y_min if opts.y_min else data_min - abs(data_min) * 0.1
+            ymax = opts.y_max if opts.y_max else data_max + abs(data_max) * 0.1
+            if (ymin, ymax) != ax.get_ylim():
+                ax.set_ylim(ymin, ymax)
+                background = None
 
-        fig.canvas.draw()
+        if use_blit:
+            if background is None:
+                fig.canvas.draw()
+            if background is not None:
+                assert callable(restore_region)
+                restore_region(background)
+                for label in list(series.keys()):
+                    if 'line' in series[label]:
+                        ax.draw_artist(series[label]['line'])
+                fig.canvas.blit(ax.bbox)
+            else:
+                fig.canvas.draw_idle()
+        else:
+            fig.canvas.draw_idle()
         fig.canvas.flush_events()
         time.sleep(opts.update_interval)
 
@@ -147,7 +213,7 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser(description='Live serial plotter')
-    parser.add_argument('--port', default='COM14', help='Serial port (e.g. COM14)')
+    parser.add_argument('--port', default='COM7', help='Serial port (e.g. COM14)')
     parser.add_argument('--baud', type=int, default=115200, help='Serial baud rate')
     parser.add_argument('--x-range', type=int, default=300, help='X axis window in seconds')
     parser.add_argument('--update-interval', type=float, default=0.1, help='Plot update interval in seconds')
