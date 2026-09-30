@@ -1,6 +1,5 @@
 import time
 from collections import deque
-from typing import Any
 import pandas as pd
 import threading
 
@@ -13,7 +12,7 @@ class TimedQueue:
         self.queue = deque()
         self._lock = threading.RLock()
 
-    def add(self, value: Any):
+    def add(self, value: float):
         """
         Adds a new data point to the queue with the current timestamp.
         """
