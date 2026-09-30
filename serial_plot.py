@@ -14,6 +14,7 @@ import threading
 import serial
 from serial.tools import list_ports
 import matplotlib.pyplot as plt
+from matplotlib.ticker import AutoMinorLocator, MaxNLocator
 import numpy as np
 from timed_queue import TimedQueue
 stop_event = threading.Event()
@@ -143,6 +144,10 @@ def plot_loop(series , opts):
     
     ax.set_ylim(opts.y_min, opts.y_max)
     ax.set_xlim(-opts.x_range, 0)
+    ax.xaxis.set_major_locator(MaxNLocator(nbins=12))
+    ax.yaxis.set_major_locator(MaxNLocator(nbins=20))
+    ax.xaxis.set_minor_locator(AutoMinorLocator(2))
+    ax.yaxis.set_minor_locator(AutoMinorLocator(2))
     if opts.title:
         ax.set_title(opts.title)
     ax.set_xlabel("Time (s)")
